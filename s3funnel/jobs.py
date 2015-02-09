@@ -138,8 +138,20 @@ class PutJob(Job):
                     log.info("Already exists, skipped: %s" % self.key)
                     return
 
+                if os.path.isdir(self.path):
+                    # TODO - what about ./ and ../ in the path component? Does that get fixed before here?
+                    log.info("Local path is a dir, creating directory keys")
+                    dirs = self.path.split(os.path.sep)
+                    full_path = ""
+                    for d in dirs:
+                        if not d.strip(): continue   # skip empty dir names, double slashes, etc
+                        full_path += "/" + d
+                        log.info("Creating key " + full_path)
+                        bucket.new_key(full_path)
+
                 k = bucket.new_key(self.key)
-                k.set_contents_from_filename(self.path, self.headers)
+                if os.path.isfile(self.path):
+                    k.set_contents_from_filename(self.path, self.headers)
                 log.info("Sent: %s" % self.key)
                 return
             except S3ResponseError, e:
@@ -149,7 +161,7 @@ class PutJob(Job):
                 log.warning("Caught exception: %r.\nRetrying..." % e)
                 time.sleep((2 ** i) / 4.0) # Exponential backoff
             except IOError, e:
-                log.warning("Path does not exist, skipping: %s" % self.path)
+                log.warning("Path does not exist, skipping: %s (%s)" % (self.path, e))
                 break
             except Exception, e:
                 log.critical("Unexpected exception: %r" % e)
